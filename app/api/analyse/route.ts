@@ -82,11 +82,13 @@ export async function POST(request: Request) {
 
     const client = new Mistral({ apiKey: apiKey.trim() });
 
+    const metadataLines = [
+      searchTerm ? `Search term used to find this article: ${searchTerm}` : null,
+      date ? `Date provided by researcher: ${date}` : null,
+    ].filter(Boolean).join('\n');
+
     const userMessage =
-      `<metadata>\n` +
-      `Search term used to find this article: ${searchTerm || 'Not specified'}\n` +
-      `Date provided by researcher: ${date || 'Not provided'}\n` +
-      `</metadata>\n\n` +
+      (metadataLines ? `<metadata>\n${metadataLines}\n</metadata>\n\n` : '') +
       `<article>\n${text.slice(0, 200_000)}\n</article>`;
 
     const chatResponse = await client.chat.complete({
