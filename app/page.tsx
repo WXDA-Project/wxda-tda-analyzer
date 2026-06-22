@@ -221,17 +221,19 @@ export default function Home() {
     : completedFiles;
 
   const HEADERS = [
-    'Title', 'Topic', 'First Words', 'First Words of Document', 'Name of Individual', 'Search Term',
+    'Relevant', 'Title', 'Topic', 'First Words', 'First Words of Document', 'Name of Individual', 'Date', 'Search Term',
   ];
 
   const rowValues = (f: FileEntry): string[] => {
     const r = f.result!;
     return [
+      r.relevant,
       r.title,
       r.short_summary,
       r.first_words,
       f.documentOpening,
       r.name_of_individual,
+      f.date,
       f.searchTerm,
     ];
   };
@@ -266,6 +268,7 @@ export default function Home() {
     { label: 'First Words' },
     { label: 'First Words of Document' },
     { label: 'Name of Individual' },
+    { label: 'Date' },
     { label: 'Search Term' },
     { label: 'Status' },
   ];
@@ -490,6 +493,9 @@ file.status === 'rate-limited' ? 'border-l-amber-400' :
                         </td>
                         <td className="px-3 py-2 text-gray-700 text-xs whitespace-nowrap">
                           {r?.name_of_individual}
+                        </td>
+                        <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">
+                          {file.date}
                         </td>
                         <td
                           className="px-3 py-2 max-w-[140px] truncate text-gray-500 text-xs"

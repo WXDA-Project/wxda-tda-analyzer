@@ -47,9 +47,10 @@ Only mark “No” when you are confident the article does not describe cross-dr
 
 -------------------------------------------- OCR RULES --------------------------------------------
 Output must be clean, natural English. You must correct obvious OCR errors using context, but:
-- do NOT change meaning
-- do NOT invent evidence
-- if unsure, keep original wording rather than guessing
+- do NOT change meaning — OCR correction is limited to fixing garbled characters (e.g. "tbe" → "the", "clotbing" → "clothing"); it does not license rewriting, paraphrasing, or interpreting ambiguous passages
+- do NOT invent evidence — every claim in your output must be traceable to actual words in the source text; do not infer, assume, or extrapolate facts that are not explicitly stated
+- do NOT fabricate or reconstruct words, phrases, or passages that are missing, illegible, or heavily corrupted — if the text is unreadable, leave it as-is or omit it; never fill gaps with plausible-sounding invented text
+- if unsure whether a correction is warranted, keep the original wording rather than guessing
 - never annotate corrections
 
 -------------------------------------------- OUTPUT FIELDS --------------------------------------------
