@@ -106,7 +106,6 @@ export default function Home() {
   const analyseFile = useCallback(async (
     fileId: string,
     content: string,
-    term: string,
     fileDate: string,
     key: string,
   ): Promise<void> => {
@@ -116,7 +115,7 @@ export default function Home() {
       const res = await fetch('/api/analyse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: content, searchTerm: term, date: fileDate, apiKey: key }),
+        body: JSON.stringify({ text: content, date: fileDate, apiKey: key }),
       });
 
       if (res.status === 429) {
@@ -153,7 +152,7 @@ export default function Home() {
     if (slots <= 0 || queued.length === 0) return;
     queued.slice(0, slots).forEach(f => {
       claimedIds.current.add(f.id);
-      analyseFile(f.id, f.content, f.searchTerm, f.date, apiKey).finally(() => {
+      analyseFile(f.id, f.content, f.date, apiKey).finally(() => {
         claimedIds.current.delete(f.id);
         setQueueTick(t => t + 1);
       });
@@ -163,21 +162,42 @@ export default function Home() {
   const handleFileList = useCallback(async (list: FileList | File[]) => {
     const arr = Array.from(list).filter(f => f.name.toLowerCase().endsWith('.txt'));
     if (!arr.length) return;
-    const newEntries: FileEntry[] = await Promise.all(
-      arr.map(async (file): Promise<FileEntry> => {
+    const parsed = await Promise.all(
+      arr.map(async (file) => {
         const raw = await file.text();
         return {
-          id: crypto.randomUUID(),
           filename: file.name,
-          status: 'queued',
-          searchTerm,
-          date,
           content: prepareContent(raw),
           documentOpening: extractDocumentOpening(raw),
         };
       })
     );
-    setFiles(prev => [...prev, ...newEntries]);
+
+    setFiles(prev => {
+      const next = [...prev];
+      for (const p of parsed) {
+        const idx = p.documentOpening.trim()
+          ? next.findIndex(f => f.documentOpening === p.documentOpening)
+          : -1;
+        if (idx !== -1) {
+          const existing = next[idx];
+          if (!existing.searchTerms.includes(searchTerm)) {
+            next[idx] = { ...existing, searchTerms: [...existing.searchTerms, searchTerm] };
+          }
+        } else {
+          next.push({
+            id: crypto.randomUUID(),
+            filename: p.filename,
+            status: 'queued',
+            searchTerms: [searchTerm],
+            date,
+            content: p.content,
+            documentOpening: p.documentOpening,
+          });
+        }
+      }
+      return next;
+    });
   }, [searchTerm, date]);
 
   const handleDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
@@ -234,7 +254,7 @@ export default function Home() {
       f.documentOpening,
       r.name_of_individual,
       f.date,
-      f.searchTerm,
+      f.searchTerms.join(', '),
     ];
   };
 
@@ -499,9 +519,9 @@ file.status === 'rate-limited' ? 'border-l-amber-400' :
                         </td>
                         <td
                           className="px-3 py-2 max-w-[140px] truncate text-gray-500 text-xs"
-                          title={file.searchTerm}
+                          title={file.searchTerms.join(', ')}
                         >
-                          {file.searchTerm}
+                          {file.searchTerms.join(', ')}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           <StatusCell

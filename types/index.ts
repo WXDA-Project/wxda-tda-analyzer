@@ -12,7 +12,7 @@ export type FileEntry = {
   id: string;
   filename: string;
   status: FileStatus;
-  searchTerm: string;
+  searchTerms: string[];
   date: string;
   content: string;
   documentOpening: string;
@@ -22,7 +22,7 @@ export type FileEntry = {
 
 export const SEARCH_TERMS = [
   'appa?e? NOT wearing',
-  'attire',
+  'attire*',
   'clo!th!? NOT cloths NOT fire NOT flames NOT money NOT cloth',
   'dress NOT address NOT dregs',
   'garb',

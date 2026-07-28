@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { Mistral } from '@mistralai/mistralai';
 import { MistralError } from '@mistralai/mistralai/models/errors/mistralerror.js';
 
-const MODEL = 'mistral-large-2512';
+const MODEL = 'mistral-large-latest';
 
 const SYSTEM_PROMPT = `You catalogue historical newspaper articles for the Waterloo Cross-Dressing Archive (WXDA).
  
@@ -71,9 +71,8 @@ name_of_individual — Primary person involved if clearly stated; otherwise “�
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { text, searchTerm, date, apiKey } = body as {
+    const { text, date, apiKey } = body as {
       text: unknown;
-      searchTerm: unknown;
       date: unknown;
       apiKey: unknown;
     };
@@ -89,7 +88,6 @@ export async function POST(request: Request) {
     const client = new Mistral({ apiKey: apiKey.trim() });
 
     const metadataLines = [
-      searchTerm ? `Search term used to find this article: ${searchTerm}` : null,
       date ? `Date provided by researcher: ${date}` : null,
     ].filter(Boolean).join('\n');
 
