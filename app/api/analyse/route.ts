@@ -143,9 +143,11 @@ export async function POST(request: Request) {
     }
   } catch (err) {
     if (err instanceof MistralError && err.statusCode === 429) {
+      console.error('[analyse] rate_limited — Mistral response:', err.body);
+      const retryAfter = err.headers.get('retry-after');
       return NextResponse.json(
-        { error: 'rate_limited', message: 'Mistral rate limit exceeded' },
-        { status: 429 },
+        { error: 'rate_limited', message: err.body || 'Mistral rate limit exceeded' },
+        { status: 429, headers: retryAfter ? { 'Retry-After': retryAfter } : undefined },
       );
     }
     const message = err instanceof Error ? err.message : 'Unknown error';

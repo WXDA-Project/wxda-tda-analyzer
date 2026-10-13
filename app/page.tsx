@@ -3,7 +3,13 @@
 import React, { useState, useCallback, useEffect, useRef, DragEvent } from 'react';
 import { FileEntry, FileStatus, SEARCH_TERMS } from '@/types';
 
-const MAX_CONCURRENT = 1;
+// Mistral counts RPS as concurrent in-flight requests, so cap open requests too
+const MAX_CONCURRENT = 8;
+const REQUESTS_PER_SECOND = 8;
+const MIN_START_INTERVAL_MS = 1000 / REQUESTS_PER_SECOND;
+const MAX_RETRIES = 8;
+const BASE_BACKOFF_MS = 2000;  // 2s, 4s, 8s, 16s, 32s, then capped
+const MAX_BACKOFF_MS = 60000;
 
 type SortField = 'relevant';
 
@@ -87,6 +93,7 @@ export default function Home() {
   const [queueTick, setQueueTick] = useState(0);
 
   const claimedIds = useRef<Set<string>>(new Set());
+  const nextStartAt = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -109,20 +116,40 @@ export default function Home() {
     fileDate: string,
     key: string,
   ): Promise<void> => {
-    setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'processing' } : f));
-    const requestStart = Date.now();
     try {
-      const res = await fetch('/api/analyse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: content, date: fileDate, apiKey: key }),
-      });
+      let res: Response;
+      for (let attempt = 0; ; attempt++) {
+        // Space request starts so we never exceed REQUESTS_PER_SECOND
+        const startAt = Math.max(Date.now(), nextStartAt.current);
+        nextStartAt.current = startAt + MIN_START_INTERVAL_MS;
+        const wait = startAt - Date.now();
+        if (wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
 
-      if (res.status === 429) {
-        setFiles(prev => prev.map(f =>
-          f.id === fileId ? { ...f, status: 'rate-limited' } : f
-        ));
-        return;
+        setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'processing' } : f));
+        res = await fetch('/api/analyse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: content, date: fileDate, apiKey: key }),
+        });
+        if (res.status !== 429) break;
+
+        const body = await res.json().catch(() => ({}));
+        console.warn(`[analyse] 429 on attempt ${attempt + 1}:`, body.message);
+        if (attempt >= MAX_RETRIES) {
+          setFiles(prev => prev.map(f =>
+            f.id === fileId ? { ...f, status: 'rate-limited' } : f
+          ));
+          return;
+        }
+        // Exponential backoff with jitter, never shorter than Mistral's Retry-After
+        const retryAfterMs = (Number(res.headers.get('retry-after')) || 0) * 1000;
+        const backoff = Math.max(
+          retryAfterMs,
+          Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * 2 ** attempt) + Math.random() * 1000,
+        );
+        // Pause the whole queue, not just this file, so we stop hammering the limit
+        nextStartAt.current = Math.max(nextStartAt.current, Date.now() + backoff);
+        await new Promise(resolve => setTimeout(resolve, backoff));
       }
 
       const data = await res.json();
@@ -139,10 +166,6 @@ export default function Home() {
       setFiles(prev => prev.map(f =>
         f.id === fileId ? { ...f, status: 'error', error: 'Network error' } : f
       ));
-    } finally {
-      const elapsed = Date.now() - requestStart;
-      const remaining = Math.max(0, 15000 - elapsed);
-      if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
     }
   }, []);
 
