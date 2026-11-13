@@ -609,7 +609,9 @@ if (status === 'rate-limited') {
   if (status === 'error') {
     return (
       <span className="flex items-center gap-2">
-        <span className="text-xs text-red-600 cursor-help" title={error}>Error</span>
+        <span className="text-xs text-red-600 cursor-help max-w-[220px] truncate" title={error}>
+          Error{error ? `: ${error}` : ''}
+        </span>
         {onRetry && (
           <button
             onClick={e => { e.stopPropagation(); onRetry(); }}

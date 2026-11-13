@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server';
 import { Mistral } from '@mistralai/mistralai';
 import { MistralError } from '@mistralai/mistralai/models/errors/mistralerror.js';
 
-const MODEL = 'mistral-large-latest';
+// Pinned to Mistral Large 4. Don't use `mistral-large-latest`: Mistral can
+// repoint it without notice, which changes classifications mid-project.
+// Large 4 is a reasoning model and can't disable thinking ('low' is the minimum);
+// thinking tokens count against maxTokens.
+const MODEL = 'mistral-large-4';
 
 const SYSTEM_PROMPT = `You catalogue historical newspaper articles for the Waterloo Cross-Dressing Archive (WXDA).
  
@@ -99,7 +103,10 @@ export async function POST(request: Request) {
     const chatResponse = await client.chat.complete({
       model: MODEL,
       temperature: 0.15,
-      maxTokens: 2000,
+      reasoningEffort: 'low',
+      // Covers thinking + the JSON answer. Theatrical / "Yes" articles produce long
+      // step-by-step reasoning; 2000 was truncating mid-JSON ("Error" on every retry).
+      maxTokens: 16000,
       responseFormat: {
         type: 'json_schema',
         jsonSchema: {
@@ -126,7 +133,8 @@ export async function POST(request: Request) {
       ],
     });
 
-    const content = chatResponse.choices?.[0]?.message?.content;
+    const choice = chatResponse.choices?.[0];
+    const content = choice?.message?.content;
     const raw = (
       typeof content === 'string'
         ? content
@@ -135,11 +143,26 @@ export async function POST(request: Request) {
           : ''
     ).trim();
 
+    const finishReason = choice?.finishReason;
+    if (finishReason === 'length' || finishReason === 'model_length') {
+      console.error(
+        `[analyse] truncated — model=${chatResponse.model} usage=${JSON.stringify(chatResponse.usage)} raw tail:`,
+        raw.slice(-300),
+      );
+      return NextResponse.json(
+        { error: `Output truncated (hit token limit, model ${chatResponse.model})`, raw },
+        { status: 500 },
+      );
+    }
+
     try {
       return NextResponse.json(JSON.parse(raw));
     } catch {
-      console.error('[analyse] parse_error — raw response:', raw);
-      return NextResponse.json({ error: 'parse_error', raw }, { status: 500 });
+      console.error(`[analyse] parse_error — model=${chatResponse.model} finish=${finishReason} raw:`, raw);
+      return NextResponse.json(
+        { error: `Could not parse model output (model ${chatResponse.model}, finish ${finishReason})`, raw },
+        { status: 500 },
+      );
     }
   } catch (err) {
     if (err instanceof MistralError && err.statusCode === 429) {
